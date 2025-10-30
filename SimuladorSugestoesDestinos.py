@@ -44,6 +44,28 @@ simulacoes = [
 
 ]
 
+# Variável global para armazenar os dados da planilha
+_dados_planilha = None
+
+def carregar_dados_planilha():
+    """
+    Carrega os dados da planilha em uma variável global para otimizar o acesso
+    """
+    global _dados_planilha
+    if _dados_planilha is None:
+        # Procura o arquivo CSV na pasta input
+        input_dir = "input"
+        arquivos_csv = [f for f in os.listdir(input_dir) if f.endswith('.csv')]
+        if arquivos_csv:
+            arquivo_csv = os.path.join(input_dir, arquivos_csv[0])
+            _dados_planilha = pd.read_csv(arquivo_csv)
+            # Converte tim_entrada para datetime para facilitar comparações
+            _dados_planilha['tim_entrada'] = pd.to_datetime(_dados_planilha['tim_entrada'])
+            # Remove registros sem ide_destino
+            _dados_planilha = _dados_planilha.dropna(subset=['ide_destino'])
+            _dados_planilha = _dados_planilha[_dados_planilha['ide_destino'].astype(str).str.strip() != '']
+    return _dados_planilha
+
 def obterSugestaoDestino(ide_portaria, tim_entrada, intervalo_minutos, quantidade_minima_entradas, ide_destino=None):
     """
     Calcula o destino sugerido com base nos parâmetros da simulação
@@ -56,22 +78,56 @@ def obterSugestaoDestino(ide_portaria, tim_entrada, intervalo_minutos, quantidad
         ide_destino: ID do destino original (opcional)
     
     Returns:
-        int ou None: ID do destino sugerido ou None se ide_destino não tiver valor
+        int ou None: ID do destino sugerido ou None se não encontrar sugestão válida
     """
     # Verifica se ide_destino tem valor válido
     if pd.isna(ide_destino) or ide_destino == '' or ide_destino is None:
         return None
     
-    # Algoritmo simplificado para gerar sugestão de destino
-    # Pode ser substituído por lógica mais complexa conforme necessário
+    # Carrega os dados da planilha
+    dados = carregar_dados_planilha()
+    if dados is None or dados.empty:
+        return None
     
-    # Combina os parâmetros para gerar um ID único
-    hash_base = hash(f"{ide_portaria}_{tim_entrada}_{intervalo_minutos}_{quantidade_minima_entradas}")
+    # Converte tim_entrada para datetime se for string
+    if isinstance(tim_entrada, str):
+        tim_entrada_dt = pd.to_datetime(tim_entrada)
+    else:
+        tim_entrada_dt = pd.to_datetime(tim_entrada)
     
-    # Gera um ID de destino entre 1 e 999
-    id_destino_sugerido = abs(hash_base) % 999 + 1
+    # Filtra registros da mesma portaria
+    dados_portaria = dados[dados['ide_portaria'] == ide_portaria].copy()
     
-    return id_destino_sugerido
+    # Filtra registros com tim_entrada anterior ao parâmetro
+    dados_anteriores = dados_portaria[dados_portaria['tim_entrada'] < tim_entrada_dt].copy()
+    
+    if dados_anteriores.empty:
+        return None
+    
+    # Calcula a diferença em minutos entre tim_entrada dos registros e o parâmetro
+    dados_anteriores['diferenca_minutos'] = (tim_entrada_dt - dados_anteriores['tim_entrada']).dt.total_seconds() / 60
+    
+    # Filtra registros que estão dentro do intervalo_minutos
+    dados_no_intervalo = dados_anteriores[dados_anteriores['diferenca_minutos'] <= intervalo_minutos]
+    
+    if dados_no_intervalo.empty:
+        return None
+    
+    # Conta a frequência de cada ide_destino
+    frequencia_destinos = dados_no_intervalo['ide_destino'].value_counts()
+    
+    if frequencia_destinos.empty:
+        return None
+    
+    # Obtém o destino mais frequente
+    destino_mais_frequente = frequencia_destinos.index[0]
+    maior_frequencia = frequencia_destinos.iloc[0]
+    
+    # Retorna o destino sugerido apenas se a frequência for >= quantidade_minima_entradas
+    if maior_frequencia >= quantidade_minima_entradas:
+        return destino_mais_frequente
+    else:
+        return None
 
 def listar_arquivos_input():
     """Lista arquivos CSV disponíveis na pasta input"""
