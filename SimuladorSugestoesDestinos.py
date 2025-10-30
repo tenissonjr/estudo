@@ -41,21 +41,28 @@ simulacoes = [
         "intervalo_minutos": 30,  # Intervalo (em minutos) de apuração da frequência de destinos mais acessados
         "quantidade_minima_entradas": 10,  # Quantidade mínima de entradas para exibição de destinos mais acessados
     },
+
     {
         "descricao": "Simulação 6",
+        "intervalo_minutos": 35,  # Intervalo (em minutos) de apuração da frequência de destinos mais acessados
+        "quantidade_minima_entradas": 5,  # Quantidade mínima de entradas para exibição de destinos mais acessados
+    },
+
+    {
+        "descricao": "Simulação 7",
         "intervalo_minutos": 45,  # Intervalo (em minutos) de apuração da frequência de destinos mais acessados
         "quantidade_minima_entradas": 8,  # Quantidade mínima de entradas para exibição de destinos mais acessados
     },
 
 
     {
-        "descricao": "Simulação 7",
+        "descricao": "Simulação 8",
         "intervalo_minutos": 60,  # Intervalo (em minutos) de apuração da frequência de destinos mais acessados
         "quantidade_minima_entradas": 12,  # Quantidade mínima de entradas para exibição de destinos mais acessados
     },
 
     {
-        "descricao": "Simulação 8",
+        "descricao": "Simulação 9",
         "intervalo_minutos": 90,  # Intervalo (em minutos) de apuração da frequência de destinos mais acessados
         "quantidade_minima_entradas": 15,  # Quantidade mínima de entradas para exibição de destinos mais acessados
     },
@@ -271,7 +278,7 @@ def csv_para_excel_simples(arquivo_csv):
                         'total_registros': len(df_port)
                     }
                 
-                # Cria DataFrame para estatísticas por portaria (simulações como linhas, portarias como colunas)
+                # Cria DataFrame para estatísticas por portaria (cada linha = simulação + portaria)
                 estatisticas_portaria = []
                 
                 for i in range(1, len(simulacoes) + 1):
@@ -279,14 +286,7 @@ def csv_para_excel_simples(arquivo_csv):
                     col_dest = f"Simulacao_{i}_Destino"
                     col_conf = f"Simulacao_{i}_Conferencia"
                     
-                    linha_stats = {
-                        'Simulacao': f"Simulação {i}",
-                        'Descricao': simulacao_info.get('descricao', f'Simulação {i}'),
-                        'Intervalo_Min': simulacao_info['intervalo_minutos'],
-                        'Qtd_Min_Entradas': simulacao_info['quantidade_minima_entradas']
-                    }
-                    
-                    # Para cada portaria, calcula as estatísticas desta simulação
+                    # Para cada portaria, cria uma linha separada com as estatísticas desta simulação
                     for portaria in portarias:
                         df_port = df_simulacoes[df_simulacoes['ide_portaria'] == portaria]
                         desc_portaria = portarias_info[portaria]['descricao']
@@ -308,16 +308,23 @@ def csv_para_excel_simples(arquivo_csv):
                             cobertura = 0
                             eficiencia = 0
                         
-                        # Colunas para esta portaria
-                        col_prefix = f"Port_{portaria}_{desc_portaria.replace(' ', '_')}"
-                        linha_stats[f'{col_prefix}_Registros'] = total_registros
-                        linha_stats[f'{col_prefix}_Sugestoes'] = total_sugestoes
-                        linha_stats[f'{col_prefix}_Acertos'] = total_acertos
-                        linha_stats[f'{col_prefix}_Precisao_Pct'] = round(precisao, 1)
-                        linha_stats[f'{col_prefix}_Cobertura_Pct'] = round(cobertura, 1)
-                        linha_stats[f'{col_prefix}_Eficiencia_F1'] = round(eficiencia, 1)
-                    
-                    estatisticas_portaria.append(linha_stats)
+                        # Linha individual para cada combinação simulação + portaria
+                        linha_stats = {
+                            'Simulacao': f"Simulação {i}",
+                            'Descricao': simulacao_info.get('descricao', f'Simulação {i}'),
+                            'Intervalo_Min': simulacao_info['intervalo_minutos'],
+                            'Qtd_Min_Entradas': simulacao_info['quantidade_minima_entradas'],
+                            'IDE_Portaria': portaria,
+                            'Descricao_Portaria': desc_portaria,
+                            'Total_Registros': total_registros,
+                            'Total_Sugestoes': total_sugestoes,
+                            'Total_Acertos': total_acertos,
+                            'Precisao_Pct': round(precisao, 1),
+                            'Cobertura_Pct': round(cobertura, 1),
+                            'Eficiencia_F1': round(eficiencia, 1)
+                        }
+                        
+                        estatisticas_portaria.append(linha_stats)
                 
                 df_stats_portaria = pd.DataFrame(estatisticas_portaria)
                 
@@ -546,42 +553,49 @@ def csv_para_excel_simples(arquivo_csv):
                     # Formatação para Estatísticas por Portaria
                     ws_portaria = writer.sheets['Estatisticas_por_Portaria']
                     
-                    # Aplica formatação condicional para todas as colunas de estatísticas (apenas tons de verde)
+                    # Encontra as colunas de métricas para aplicar formatação condicional
+                    portaria_precisao_col = None
+                    portaria_cobertura_col = None  
+                    portaria_eficiencia_col = None
+                    
                     for col_idx, cell in enumerate(ws_portaria[1], 1):
-                        if cell.value and 'Precisao_Pct' in str(cell.value):
-                            precisao_range = f"{ws_portaria.cell(row=2, column=col_idx).coordinate}:{ws_portaria.cell(row=len(df_stats_portaria)+1, column=col_idx).coordinate}"
-                            rule = ColorScaleRule(start_type='min', start_color='E8F5E8',
-                                                mid_type='percentile', mid_value=50, mid_color='A8D8A8',
-                                                end_type='max', end_color='2E7D32')
-                            ws_portaria.conditional_formatting.add(precisao_range, rule)
-                        
-                        # Formatação para colunas de cobertura
-                        elif cell.value and 'Cobertura_Pct' in str(cell.value):
-                            cobertura_range = f"{ws_portaria.cell(row=2, column=col_idx).coordinate}:{ws_portaria.cell(row=len(df_stats_portaria)+1, column=col_idx).coordinate}"
-                            rule = ColorScaleRule(start_type='min', start_color='E8F5E8',
-                                                mid_type='percentile', mid_value=50, mid_color='A8D8A8',
-                                                end_type='max', end_color='2E7D32')
-                            ws_portaria.conditional_formatting.add(cobertura_range, rule)
-                        
-                        # Formatação especial para colunas de eficiência (tons de verde mais intensos)
-                        elif cell.value and 'Eficiencia_F1' in str(cell.value):
-                            eficiencia_range = f"{ws_portaria.cell(row=2, column=col_idx).coordinate}:{ws_portaria.cell(row=len(df_stats_portaria)+1, column=col_idx).coordinate}"
-                            rule = ColorScaleRule(start_type='min', start_color='F1F8E9',
-                                                mid_type='percentile', mid_value=50, mid_color='66BB6A',
-                                                end_type='max', end_color='1B5E20')
-                            ws_portaria.conditional_formatting.add(eficiencia_range, rule)
+                        if cell.value == 'Precisao_Pct':
+                            portaria_precisao_col = col_idx
+                        elif cell.value == 'Cobertura_Pct':
+                            portaria_cobertura_col = col_idx
+                        elif cell.value == 'Eficiencia_F1':
+                            portaria_eficiencia_col = col_idx
+                    
+                    # Aplica formatação condicional nas colunas de métricas
+                    if portaria_precisao_col:
+                        precisao_range = f"{ws_portaria.cell(row=2, column=portaria_precisao_col).coordinate}:{ws_portaria.cell(row=len(df_stats_portaria)+1, column=portaria_precisao_col).coordinate}"
+                        rule_precisao = ColorScaleRule(start_type='min', start_color='E8F5E8',
+                                                     mid_type='percentile', mid_value=50, mid_color='A8D8A8',
+                                                     end_type='max', end_color='2E7D32')
+                        ws_portaria.conditional_formatting.add(precisao_range, rule_precisao)
+                    
+                    if portaria_cobertura_col:
+                        cobertura_range = f"{ws_portaria.cell(row=2, column=portaria_cobertura_col).coordinate}:{ws_portaria.cell(row=len(df_stats_portaria)+1, column=portaria_cobertura_col).coordinate}"
+                        rule_cobertura = ColorScaleRule(start_type='min', start_color='E8F5E8',
+                                                      mid_type='percentile', mid_value=50, mid_color='A8D8A8',
+                                                      end_type='max', end_color='2E7D32')
+                        ws_portaria.conditional_formatting.add(cobertura_range, rule_cobertura)
+                    
+                    if portaria_eficiencia_col:
+                        eficiencia_range = f"{ws_portaria.cell(row=2, column=portaria_eficiencia_col).coordinate}:{ws_portaria.cell(row=len(df_stats_portaria)+1, column=portaria_eficiencia_col).coordinate}"
+                        rule_eficiencia = ColorScaleRule(start_type='min', start_color='F1F8E9',
+                                                        mid_type='percentile', mid_value=50, mid_color='66BB6A',
+                                                        end_type='max', end_color='1B5E20')
+                        ws_portaria.conditional_formatting.add(eficiencia_range, rule_eficiencia)
                     
                     # Aplica ajuste de cor do texto para estatísticas por portaria
-                    colunas_portaria = []
-                    for col_idx, cell in enumerate(ws_portaria[1], 1):
-                        if cell.value:
-                            col_name = str(cell.value)
-                            if 'Precisao_Pct' in col_name or 'Cobertura_Pct' in col_name or 'Eficiencia_F1' in col_name:
-                                # Encontra o nome da coluna correspondente no DataFrame
-                                for df_col in df_stats_portaria.columns:
-                                    if col_name == df_col:
-                                        colunas_portaria.append({'col_idx': col_idx, 'col_name': df_col})
-                                        break
+                    colunas_portaria = [
+                        {'col_idx': portaria_precisao_col, 'col_name': 'Precisao_Pct'},
+                        {'col_idx': portaria_cobertura_col, 'col_name': 'Cobertura_Pct'},
+                        {'col_idx': portaria_eficiencia_col, 'col_name': 'Eficiencia_F1'}
+                    ]
+                    # Remove entradas None
+                    colunas_portaria = [col for col in colunas_portaria if col['col_idx'] is not None]
                     
                     ajustar_cor_texto_por_valor(ws_portaria, df_stats_portaria, colunas_portaria)
                     
