@@ -461,6 +461,69 @@ def csv_para_excel_simples(arquivo_csv):
                     # Aba com análise e sugestões
                     df_analise.to_excel(writer, sheet_name='Analise_e_Sugestoes', index=False)
                     
+                    # Criar aba de sequências de destinos por portaria
+                    sequencias_destinos = []
+                    
+                    # Para cada portaria, analisar as sequências de destinos sugeridos
+                    for portaria in df_simulacoes['ide_portaria'].unique():
+                        df_port = df_simulacoes[df_simulacoes['ide_portaria'] == portaria].copy()
+                        desc_portaria = df_port['des_portaria'].iloc[0] if 'des_portaria' in df_port.columns else f'Portaria_{portaria}'
+                        
+                        # Para cada simulação
+                        for i in range(1, len(simulacoes) + 1):
+                            col_dest = f"Simulacao_{i}_Destino"
+                            if col_dest in df_port.columns:
+                                # Ordenar por horário de entrada
+                                df_port_sorted = df_port.sort_values('tim_entrada')
+                                
+                                # Obter dados das sugestões (não nulas)
+                                df_sugestoes = df_port_sorted[df_port_sorted[col_dest].notna()][['tim_entrada', col_dest]].copy()
+                                
+                                if not df_sugestoes.empty:
+                                    # Para cada destino distinto sugerido, criar uma linha
+                                    destinos_processados = set()
+                                    ordem_destino = 1
+                                    
+                                    for _, row_sugestao in df_sugestoes.iterrows():
+                                        destino = row_sugestao[col_dest]
+                                        horario = row_sugestao['tim_entrada']
+                                        
+                                        # Se é a primeira vez que vemos este destino
+                                        if destino not in destinos_processados:
+                                            destinos_processados.add(destino)
+                                            
+                                            # Buscar descrição do destino nos dados originais
+                                            if 'desdestinoGenerico' in df_port.columns:
+                                                desc_rows = df_port[df_port['ide_destino'] == destino]['desdestinoGenerico']
+                                                if not desc_rows.empty:
+                                                    desc_destino = desc_rows.iloc[0]
+                                                else:
+                                                    desc_destino = f'Destino_{destino}'
+                                            else:
+                                                desc_destino = f'Destino_{destino}'
+                                            
+                                            # Contar quantas vezes este destino foi sugerido
+                                            count_destino = (df_sugestoes[col_dest] == destino).sum()
+                                            
+                                            sequencias_destinos.append({
+                                                'Portaria': portaria,
+                                                'Desc_Portaria': desc_portaria,
+                                                'Simulacao': f'Simulação {i}',
+                                                'Ordem_Sugestao': ordem_destino,
+                                                'Ide_Destino': destino,
+                                                'Desc_Destino': desc_destino,
+                                                'Horario_Primeira_Sugestao': horario,
+                                                'Total_Vezes_Sugerido': count_destino
+                                            })
+                                            
+                                            ordem_destino += 1
+                    
+                    # Criar DataFrame das sequências de destinos
+                    df_sequencias = pd.DataFrame(sequencias_destinos)
+                    
+                    # Salvar aba de sequências de destinos
+                    df_sequencias.to_excel(writer, sheet_name='Sequencias_Destinos', index=False)
+                    
                     # Aplica formatação condicional nas abas de estatísticas
                     from openpyxl.formatting.rule import ColorScaleRule
                     from openpyxl.styles import Font, Alignment
@@ -640,8 +703,59 @@ def csv_para_excel_simples(arquivo_csv):
                         cell.fill = PatternFill(start_color='2E7D32', end_color='2E7D32', fill_type='solid')  # Verde escuro
                         cell.font = Font(bold=True, color='FFFFFF')  # Texto branco
                     
+                    # Formatação para Sequências de Destinos
+                    ws_sequencias = writer.sheets['Sequencias_Destinos']
+                    
+                    # Formatação para cabeçalhos da aba de sequências
+                    for cell in ws_sequencias[1]:
+                        cell.font = Font(bold=True)
+                        cell.alignment = Alignment(horizontal='center')
+                        cell.fill = PatternFill(start_color='1976D2', end_color='1976D2', fill_type='solid')  # Azul escuro
+                        cell.font = Font(bold=True, color='FFFFFF')  # Texto branco
+                    
+                    # Formatação alternada por portaria e simulação
+                    if len(df_sequencias) > 0:
+                        current_key = None
+                        color_toggle = False
+                        
+                        for row_idx, row in enumerate(ws_sequencias.iter_rows(min_row=2), 2):
+                            portaria_value = row[0].value  # Coluna Portaria
+                            simulacao_value = row[2].value  # Coluna Simulacao
+                            key = f"{portaria_value}_{simulacao_value}"
+                            
+                            # Alterna cor quando muda a combinação portaria+simulação
+                            if current_key != key:
+                                current_key = key
+                                color_toggle = not color_toggle
+                            
+                            # Aplica cor de fundo alternada
+                            if color_toggle:
+                                fill_color = PatternFill(start_color='F5F5F5', end_color='F5F5F5', fill_type='solid')  # Cinza claro
+                            else:
+                                fill_color = PatternFill(start_color='E8F4FD', end_color='E8F4FD', fill_type='solid')  # Azul muito claro
+                            
+                            for cell in row:
+                                cell.fill = fill_color
+                    
+                    # Formatação condicional para coluna de ordem
+                    if len(df_sequencias) > 0:
+                        # Encontra a coluna Ordem_Sugestao
+                        ordem_col = None
+                        for col_idx, cell in enumerate(ws_sequencias[1], 1):
+                            if cell.value == 'Ordem_Sugestao':
+                                ordem_col = col_idx
+                                break
+                        
+                        if ordem_col:
+                            # Aplica formatação condicional na coluna de ordem
+                            ordem_range = f"{ws_sequencias.cell(row=2, column=ordem_col).coordinate}:{ws_sequencias.cell(row=len(df_sequencias)+1, column=ordem_col).coordinate}"
+                            rule_ordem = ColorScaleRule(start_type='min', start_color='E8F5E8',
+                                                       mid_type='percentile', mid_value=50, mid_color='A8D8A8',
+                                                       end_type='max', end_color='2E7D32')
+                            ws_sequencias.conditional_formatting.add(ordem_range, rule_ordem)
+                    
                     # Ajusta largura das colunas
-                    for ws in [ws_gerais, ws_portaria, ws_analise]:
+                    for ws in [ws_gerais, ws_portaria, ws_analise, ws_sequencias]:
                         for column in ws.columns:
                             max_length = 0
                             column_letter = column[0].column_letter
@@ -656,10 +770,11 @@ def csv_para_excel_simples(arquivo_csv):
                 
                 print(f"\n✅ Simulações aplicadas com sucesso!")
                 print(f"📊 Novas colunas: {len(simulacoes)} simulações + {len(simulacoes)} conferências adicionadas")
-                print(f"📋 Criadas 4 abas: Dados_e_Simulacoes, Estatisticas_Gerais, Estatisticas_por_Portaria, Analise_e_Sugestoes")
+                print(f"📋 Criadas 5 abas: Dados_e_Simulacoes, Estatisticas_Gerais, Estatisticas_por_Portaria, Analise_e_Sugestoes, Sequencias_Destinos")
                 print(f"📈 Métrica de Eficiência F1-Score adicionada (combina precisão e cobertura)")
                 print(f"🎨 Formatação condicional aplicada: mapa de calor em tons de verde com ajuste automático da cor do texto")
                 print(f"🔍 Análise inteligente criada: sugestões para atingir F1-Score > 40")
+                print(f"🔄 Nova aba de Sequências de Destinos: mostra padrões de sugestões por portaria e simulação")
                 
                 # Mostra estatísticas de conferência
                 print(f"\n📈 Estatísticas de Acertos:")
