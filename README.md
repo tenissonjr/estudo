@@ -5,7 +5,7 @@ Este projeto contém programas para processar arquivos CSV do sistema SIVIS e co
 ## 📁 Arquivos Incluídos
 
 ### 1. `processar_sivis.py` - **Versão Completa**
-- **Função**: Processa dados do SIVIS com análises detalhadas
+- **Função**: Processa dados  com análises detalhadas
 - **Características**:
   - Gera múltiplas abas no Excel
   - Estatísticas por portaria, destino, data e hora
@@ -99,7 +99,7 @@ pip install pandas openpyxl
 ├── 📄 processar_sivis.py                      # Programa principal
 ├── 📄 conversor_simples.py                    # Versão simplificada
 ├── 📄 README.md                               # Este arquivo
-├── 📊 Sivis_Entradas_28-10-2025_Processado.xlsx  # Excel gerado
+├── 📊 Entradas_28-10-2025_Processado.xlsx  # Excel gerado
 └── 📁 .venv/                                  # Ambiente virtual
 ```
 
@@ -147,5 +147,4 @@ Para processar novos arquivos SIVIS:
 - Compatível com Windows, Linux e macOS
 - Geração automática de relatórios executivos
 
----
-*Desenvolvido para otimizar o processamento de dados do sistema SIVIS da Câmara dos Deputados*
+
