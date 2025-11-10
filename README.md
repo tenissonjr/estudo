@@ -1,4 +1,4 @@
-# 📊 Processador de Dados SIVIS - Câmara dos Deputados
+
 
 Este projeto contém programas para processar arquivos CSV do sistema SIVIS e convertê-los para planilhas Excel com análises e estatísticas.
 
